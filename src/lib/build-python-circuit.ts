@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import type { AnyCircuitElement } from "circuit-json";
 import { runTscircuitCode } from "@tscircuit/eval";
 
-const DEFAULT_ENTRYPOINTS = ["circuit.py", "index.py"] as const;
+export const DEFAULT_ENTRYPOINTS = ["circuit.py", "index.py"] as const;
 
 const fileExists = async (filePath: string) => {
   try {
@@ -34,13 +34,19 @@ const findProjectRoot = async (startPath: string) => {
   }
 };
 
-const resolvePythonEntrypoint = async ({
+export type ResolvedPythonEntrypoint = {
+  entryFilePath: string;
+  inputIsDirectory: boolean;
+  inputRootPath: string;
+};
+
+export const resolvePythonEntrypoint = async ({
   inputPath = ".",
   cwd = process.cwd(),
 }: {
   inputPath?: string;
   cwd?: string;
-}) => {
+}): Promise<ResolvedPythonEntrypoint> => {
   const resolvedInputPath = path.resolve(cwd, inputPath);
   const inputStats = await fs
     .stat(resolvedInputPath)
@@ -97,46 +103,52 @@ const runPythonRenderer = async ({
     );
   }
 
-  const spawnResult = await new Promise<{ code: number | null; stderr: string }>(
-    (resolve, reject) => {
-      const child = spawn(
-        pythonBin,
-        [
-          rendererScriptPath,
-          generatedPythonDir,
-          projectDir,
-          entryFilePath,
-          renderOutputPath,
-        ],
-        {
-          cwd: projectDir,
-          stdio: ["ignore", "ignore", "pipe"],
-        },
-      );
+  try {
+    const spawnResult = await new Promise<{ code: number | null; stderr: string }>(
+      (resolve, reject) => {
+        const child = spawn(
+          pythonBin,
+          [
+            rendererScriptPath,
+            generatedPythonDir,
+            projectDir,
+            entryFilePath,
+            renderOutputPath,
+          ],
+          {
+            cwd: projectDir,
+            env: {
+              ...process.env,
+              PYTHONDONTWRITEBYTECODE: "1",
+            },
+            stdio: ["ignore", "ignore", "pipe"],
+          },
+        );
 
-      let stderr = "";
+        let stderr = "";
 
-      child.stderr.on("data", (chunk: Buffer | string) => {
-        stderr += chunk.toString();
-      });
+        child.stderr.on("data", (chunk: Buffer | string) => {
+          stderr += chunk.toString();
+        });
 
-      child.on("error", reject);
-      child.on("close", (code: number | null) => resolve({ code, stderr }));
-    },
-  );
-
-  if (spawnResult.code !== 0) {
-    throw new Error(
-      spawnResult.stderr.trim() || `Python renderer exited with code ${spawnResult.code}`,
+        child.on("error", reject);
+        child.on("close", (code: number | null) => resolve({ code, stderr }));
+      },
     );
+
+    if (spawnResult.code !== 0) {
+      throw new Error(
+        spawnResult.stderr.trim() || `Python renderer exited with code ${spawnResult.code}`,
+      );
+    }
+
+    return JSON.parse(await fs.readFile(renderOutputPath, "utf8")) as {
+      selectedSymbol: string;
+      tsx: string;
+    };
+  } finally {
+    await fs.rm(tempDirPath, { force: true, recursive: true });
   }
-
-  const renderOutput = JSON.parse(
-    await fs.readFile(renderOutputPath, "utf8"),
-  ) as { selectedSymbol: string; tsx: string };
-
-  await fs.rm(tempDirPath, { force: true, recursive: true });
-  return renderOutput;
 };
 
 const getOutputDir = ({
@@ -157,15 +169,42 @@ const getOutputDir = ({
   return path.join(projectDir, "dist", relativeBasePath);
 };
 
-export type BuildPythonCircuitResult = {
-  circuitJson: AnyCircuitElement[];
-  circuitJsonPath: string;
-  entryFilePath: string;
-  generatedTsxPath: string;
-  outputDir: string;
+export type RenderPythonCircuitResult = ResolvedPythonEntrypoint & {
   projectDir: string;
   selectedSymbol: string;
   tsxSource: string;
+};
+
+export async function renderPythonCircuit({
+  inputPath = ".",
+  cwd = process.cwd(),
+}: {
+  inputPath?: string;
+  cwd?: string;
+} = {}): Promise<RenderPythonCircuitResult> {
+  const { entryFilePath, inputIsDirectory, inputRootPath } =
+    await resolvePythonEntrypoint({ cwd, inputPath });
+  const projectDir = await findProjectRoot(path.dirname(entryFilePath));
+  const { selectedSymbol, tsx } = await runPythonRenderer({
+    entryFilePath,
+    projectDir,
+  });
+
+  return {
+    entryFilePath,
+    inputIsDirectory,
+    inputRootPath,
+    projectDir,
+    selectedSymbol,
+    tsxSource: tsx,
+  };
+}
+
+export type BuildPythonCircuitResult = RenderPythonCircuitResult & {
+  circuitJson: AnyCircuitElement[];
+  circuitJsonPath: string;
+  generatedTsxPath: string;
+  outputDir: string;
 };
 
 export async function buildPythonCircuit({
@@ -175,37 +214,28 @@ export async function buildPythonCircuit({
   inputPath?: string;
   cwd?: string;
 } = {}): Promise<BuildPythonCircuitResult> {
-  const { entryFilePath, inputIsDirectory, inputRootPath } =
-    await resolvePythonEntrypoint({ cwd, inputPath });
-  const projectDir = await findProjectRoot(path.dirname(entryFilePath));
-  const { selectedSymbol, tsx } = await runPythonRenderer({
-    entryFilePath,
-    projectDir,
-  });
-  const circuitJson = await runTscircuitCode(tsx, {
-    name: path.basename(entryFilePath),
+  const renderedCircuit = await renderPythonCircuit({ inputPath, cwd });
+  const circuitJson = await runTscircuitCode(renderedCircuit.tsxSource, {
+    name: path.basename(renderedCircuit.entryFilePath),
   });
   const outputDir = getOutputDir({
-    entryFilePath,
-    inputIsDirectory,
-    inputRootPath,
-    projectDir,
+    entryFilePath: renderedCircuit.entryFilePath,
+    inputIsDirectory: renderedCircuit.inputIsDirectory,
+    inputRootPath: renderedCircuit.inputRootPath,
+    projectDir: renderedCircuit.projectDir,
   });
   const generatedTsxPath = path.join(outputDir, "generated.circuit.tsx");
   const circuitJsonPath = path.join(outputDir, "circuit.json");
 
   await fs.mkdir(outputDir, { recursive: true });
-  await fs.writeFile(generatedTsxPath, tsx, "utf8");
+  await fs.writeFile(generatedTsxPath, renderedCircuit.tsxSource, "utf8");
   await fs.writeFile(circuitJsonPath, JSON.stringify(circuitJson, null, 2));
 
   return {
+    ...renderedCircuit,
     circuitJson,
     circuitJsonPath,
-    entryFilePath,
     generatedTsxPath,
     outputDir,
-    projectDir,
-    selectedSymbol,
-    tsxSource: tsx,
   };
 }

@@ -10,6 +10,10 @@ The repo does two things:
 2. `bun run cli build <path>` runs a `circuit.py` file with that Python package,
    turns the resulting Python object graph into TSX, and feeds the generated TSX
    into `@tscircuit/eval` to produce circuit JSON.
+3. `bun run start` builds every Python example under `examples/` into
+   sibling `*.py.tsx` files, starts a tscircuit dev server rooted at
+   `examples/`, and keeps those generated TSX files in sync as the Python files
+   change.
 
 ## Requirements
 
@@ -40,6 +44,29 @@ This produces:
 
 - `dist/examples/example01-led-circuit/generated.circuit.tsx`
 - `dist/examples/example01-led-circuit/circuit.json`
+
+## Start The Dev Server
+
+```bash
+bun run start
+```
+
+This will:
+
+- generate the Python bindings automatically if they do not exist yet
+- write `circuit.py.tsx` next to each Python example entrypoint
+- start the tscircuit dev server with `examples/` as the project root
+- rebuild those generated TSX files whenever `examples/**/*.py` changes
+
+The tscircuit file picker will then show paths like:
+
+- `example01-led-circuit/circuit.py.tsx`
+
+You can also choose a different port:
+
+```bash
+bun run start -- --port 3030
+```
 
 ## Example Python API
 

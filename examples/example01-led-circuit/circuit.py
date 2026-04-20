@@ -5,7 +5,7 @@ r1 = resistor(name="R1", resistance="1k", footprint="0603", pcbY=-4)
 
 circuit = Circuit(
     board(
-        width="12mm",
+        width="50mm",
         height="20mm",
         children=[
             led1,
