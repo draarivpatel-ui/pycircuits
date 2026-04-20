@@ -2,7 +2,6 @@
   "name": "pycircuit",
   "module": "src/index.ts",
   "type": "module",
-  "private": true,
   "scripts": {
     "build": "bun run src/cli.ts build",
     "cli": "bun run src/cli.ts",
