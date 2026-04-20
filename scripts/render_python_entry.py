@@ -39,7 +39,7 @@ def main() -> int:
 
     if not generated_python_dir.exists():
         raise RuntimeError(
-            f"Generated Python library not found: {generated_python_dir}. Run 'bun run generate' first."
+            f"Generated Python library not found: {generated_python_dir}. Run 'pycircuit generate' (or 'bun run generate' in this repo) first."
         )
 
     sys.path.insert(0, str(generated_python_dir))

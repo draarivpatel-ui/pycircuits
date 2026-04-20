@@ -5,9 +5,9 @@ import { startPythonDevServer } from "./lib/start-python-dev-server";
 
 const printUsage = () => {
   console.log(`Usage:
-  bun run cli build <path>
-  bun run cli generate
-  bun run cli start [path] [--port <number>]
+  pycircuit build <path>
+  pycircuit generate
+  pycircuit start [path] [--port <number>]
 `);
 };
 

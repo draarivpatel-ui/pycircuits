@@ -1,18 +1,47 @@
 {
   "name": "pycircuit",
-  "module": "src/index.ts",
+  "version": "0.1.0",
+  "description": "Bootstrap a Python-facing tscircuit workflow from @tscircuit/props.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tscircuit/pycircuit.git"
+  },
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "pycircuit": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "scripts/render_python_entry.py"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "build": "bun run src/cli.ts build",
+    "build": "tsup",
+    "build:circuit": "bun run src/cli.ts build",
     "cli": "bun run src/cli.ts",
-    "generate": "bun run src/generate.ts",
+    "generate": "bun run src/cli.ts generate",
+    "prepare": "tsup",
     "start": "bun run src/cli.ts start",
-    "typecheck": "bunx tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@tscircuit/props": "^0.0.506",
     "@types/bun": "latest",
     "@types/node": "^25.6.0",
+    "tsup": "8.5.1",
     "typescript": "^5.9.3"
   },
   "dependencies": {

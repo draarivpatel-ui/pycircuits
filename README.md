@@ -3,30 +3,43 @@
 `pycircuit` bootstraps a Python-facing tscircuit workflow from
 `@tscircuit/props`.
 
-The repo does two things:
+The project does three things:
 
-1. `bun run generate` reads `@tscircuit/props` and emits a generated Python
+1. `pycircuit generate` reads `@tscircuit/props` and emits a generated Python
    package in `generated/python/pycircuit`.
-2. `bun run cli build <path>` runs a `circuit.py` file with that Python package,
+2. `pycircuit build <path>` runs a `circuit.py` file with that Python package,
    turns the resulting Python object graph into TSX, and feeds the generated TSX
    into `@tscircuit/eval` to produce circuit JSON.
-3. `bun run start` builds every Python example under `examples/` into
+3. `pycircuit start` builds every Python example under `examples/` into
    sibling `*.py.tsx` files, starts a tscircuit dev server rooted at
    `examples/`, and keeps those generated TSX files in sync as the Python files
    change.
 
 ## Requirements
 
-- Bun
+- Node.js 18+
 - Python 3 available as `python3`
+- Bun only if you are developing this repository locally
 
 ## Install
+
+```bash
+npm install pycircuit
+```
+
+For local development in this repository:
 
 ```bash
 bun install
 ```
 
 ## Generate The Python Library
+
+```bash
+npx pycircuit generate
+```
+
+In this repository you can also run:
 
 ```bash
 bun run generate
@@ -37,7 +50,7 @@ That writes a generated Python package to `generated/python/pycircuit`.
 ## Build An Example
 
 ```bash
-bun run cli build ./examples/example01-led-circuit
+npx pycircuit build ./examples/example01-led-circuit
 ```
 
 This produces:
@@ -48,7 +61,7 @@ This produces:
 ## Start The Dev Server
 
 ```bash
-bun run start
+npx pycircuit start
 ```
 
 This will:
@@ -65,7 +78,7 @@ The tscircuit file picker will then show paths like:
 You can also choose a different port:
 
 ```bash
-bun run start -- --port 3030
+npx pycircuit start --port 3030
 ```
 
 ## Example Python API

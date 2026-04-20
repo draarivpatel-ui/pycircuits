@@ -1,7 +1,9 @@
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import type { AnyCircuitElement } from "circuit-json";
 import { runTscircuitCode } from "@tscircuit/eval";
 
@@ -14,6 +16,22 @@ const fileExists = async (filePath: string) => {
   } catch {
     return false;
   }
+};
+
+const resolvePackageAssetPath = (relativeAssetPath: string) => {
+  const candidateUrls = [
+    new URL(`../${relativeAssetPath}`, import.meta.url),
+    new URL(`../../${relativeAssetPath}`, import.meta.url),
+  ];
+
+  for (const candidateUrl of candidateUrls) {
+    const candidatePath = fileURLToPath(candidateUrl);
+    if (fsSync.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+
+  throw new Error(`Unable to locate package asset: ${relativeAssetPath}`);
 };
 
 const findProjectRoot = async (startPath: string) => {
@@ -89,17 +107,15 @@ const runPythonRenderer = async ({
 }) => {
   const pythonBin = process.env.PYCIRCUIT_PYTHON_BIN || "python3";
   const generatedPythonDir = path.join(projectDir, "generated", "python");
-  const rendererScriptPath = path.join(
-    projectDir,
-    "scripts",
-    "render_python_entry.py",
+  const rendererScriptPath = resolvePackageAssetPath(
+    "scripts/render_python_entry.py",
   );
   const tempDirPath = await fs.mkdtemp(path.join(os.tmpdir(), "pycircuit-"));
   const renderOutputPath = path.join(tempDirPath, "render-output.json");
 
   if (!(await fileExists(generatedPythonDir))) {
     throw new Error(
-      'Generated Python library not found. Run "bun run generate" first.',
+      'Generated Python library not found. Run "pycircuit generate" (or "bun run generate" in this repo) first.',
     );
   }
 
