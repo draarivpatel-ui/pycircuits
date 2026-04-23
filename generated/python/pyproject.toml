@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "pycircuit"
 version = "0.1.0"
 description = "Generated Python bindings for @tscircuit/props 0.0.506"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pycircuit"]

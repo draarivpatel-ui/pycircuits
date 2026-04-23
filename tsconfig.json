@@ -1,4 +1,5 @@
 {
+  "include": ["index.ts", "src/**/*.ts", "tsup.config.ts", "tsup.pypi.config.ts"],
   "compilerOptions": {
     // Environment setup & latest features
     "lib": ["ESNext"],

@@ -18,7 +18,7 @@ The project does three things:
 ## Requirements
 
 - Node.js 18+
-- Python 3 available as `python3`
+- Python 3.9+ available as `python3`
 - Bun only if you are developing this repository locally
 
 ## Install
@@ -32,6 +32,29 @@ For local development in this repository:
 ```bash
 bun install
 ```
+
+## Build The PyPI Package
+
+The PyPI distribution is named `tscircuit-pycircuit` and keeps the import name
+`pycircuit`.
+
+```bash
+npm run build:pypi
+```
+
+That assembles a publishable Python source tree in:
+
+- `dist/pypi/tscircuit-pycircuit`
+
+To build the wheel and sdist from that tree:
+
+```bash
+npm run build:pypi:dist
+```
+
+The published Python package expects a preinstalled Node.js runtime on `PATH`
+and ships the JavaScript runtime as a bundled single-file artifact inside the
+wheel.
 
 ## Generate The Python Library
 

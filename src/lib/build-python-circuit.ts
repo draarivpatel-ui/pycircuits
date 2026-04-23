@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { AnyCircuitElement } from "circuit-json";
 import { runTscircuitCode } from "@tscircuit/eval";
+import { findProjectRoot } from "./project-root";
 
 export const DEFAULT_ENTRYPOINTS = ["circuit.py", "index.py"] as const;
 
@@ -34,23 +35,7 @@ const resolvePackageAssetPath = (relativeAssetPath: string) => {
   throw new Error(`Unable to locate package asset: ${relativeAssetPath}`);
 };
 
-const findProjectRoot = async (startPath: string) => {
-  let currentPath = startPath;
-
-  while (true) {
-    const packageJsonPath = path.join(currentPath, "package.json");
-    if (await fileExists(packageJsonPath)) {
-      return currentPath;
-    }
-
-    const parentPath = path.dirname(currentPath);
-    if (parentPath === currentPath) {
-      return startPath;
-    }
-
-    currentPath = parentPath;
-  }
-};
+const getInstalledRendererModule = () => process.env.PYCIRCUIT_RENDER_MODULE;
 
 export type ResolvedPythonEntrypoint = {
   entryFilePath: string;
@@ -99,40 +84,46 @@ export const resolvePythonEntrypoint = async ({
 };
 
 const runPythonRenderer = async ({
+  cwd = process.cwd(),
   entryFilePath,
   projectDir,
 }: {
+  cwd?: string;
   entryFilePath: string;
   projectDir: string;
 }) => {
   const pythonBin = process.env.PYCIRCUIT_PYTHON_BIN || "python3";
-  const generatedPythonDir = path.join(projectDir, "generated", "python");
-  const rendererScriptPath = resolvePackageAssetPath(
-    "scripts/render_python_entry.py",
-  );
+  const rendererModule = getInstalledRendererModule();
   const tempDirPath = await fs.mkdtemp(path.join(os.tmpdir(), "pycircuit-"));
   const renderOutputPath = path.join(tempDirPath, "render-output.json");
 
-  if (!(await fileExists(generatedPythonDir))) {
-    throw new Error(
-      'Generated Python library not found. Run "pycircuit generate" (or "bun run generate" in this repo) first.',
-    );
+  if (!rendererModule) {
+    const generatedPythonDir = path.join(projectDir, "generated", "python");
+    if (!(await fileExists(generatedPythonDir))) {
+      throw new Error(
+        'Generated Python library not found. Run "pycircuit generate" (or "bun run generate" in this repo) first.',
+      );
+    }
   }
 
   try {
+    const spawnArgs = rendererModule
+      ? ["-m", rendererModule, projectDir, entryFilePath, renderOutputPath]
+      : [
+          resolvePackageAssetPath("scripts/render_python_entry.py"),
+          path.join(projectDir, "generated", "python"),
+          projectDir,
+          entryFilePath,
+          renderOutputPath,
+        ];
+
     const spawnResult = await new Promise<{ code: number | null; stderr: string }>(
       (resolve, reject) => {
         const child = spawn(
           pythonBin,
-          [
-            rendererScriptPath,
-            generatedPythonDir,
-            projectDir,
-            entryFilePath,
-            renderOutputPath,
-          ],
+          spawnArgs,
           {
-            cwd: projectDir,
+            cwd,
             env: {
               ...process.env,
               PYTHONDONTWRITEBYTECODE: "1",
@@ -165,6 +156,28 @@ const runPythonRenderer = async ({
   } finally {
     await fs.rm(tempDirPath, { force: true, recursive: true });
   }
+};
+
+const resolveProjectDir = async ({
+  cwd = process.cwd(),
+  entryFilePath,
+}: {
+  cwd?: string;
+  entryFilePath: string;
+}) => {
+  const projectRoot = await findProjectRoot({
+    fallbackPath: cwd,
+    startPath: path.dirname(entryFilePath),
+  });
+
+  if (
+    await fileExists(path.join(projectRoot, "package.json")) ||
+    await fileExists(path.join(projectRoot, "pyproject.toml"))
+  ) {
+    return projectRoot;
+  }
+
+  return path.resolve(cwd);
 };
 
 const getOutputDir = ({
@@ -200,8 +213,9 @@ export async function renderPythonCircuit({
 } = {}): Promise<RenderPythonCircuitResult> {
   const { entryFilePath, inputIsDirectory, inputRootPath } =
     await resolvePythonEntrypoint({ cwd, inputPath });
-  const projectDir = await findProjectRoot(path.dirname(entryFilePath));
+  const projectDir = await resolveProjectDir({ cwd, entryFilePath });
   const { selectedSymbol, tsx } = await runPythonRenderer({
+    cwd,
     entryFilePath,
     projectDir,
   });

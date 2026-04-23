@@ -30,6 +30,9 @@
   },
   "scripts": {
     "build": "tsup",
+    "build:pypi": "npm run build:pypi:js && bun run src/build-pypi-package.ts",
+    "build:pypi:dist": "npm run build:pypi && python3 -m build dist/pypi/tscircuit-pycircuit",
+    "build:pypi:js": "tsup --config tsup.pypi.config.ts",
     "build:circuit": "bun run src/cli.ts build",
     "cli": "bun run src/cli.ts",
     "generate": "bun run src/cli.ts generate",

@@ -5,6 +5,7 @@ import path from "node:path";
 import { DevServer } from "@tscircuit/cli/lib";
 import { DEFAULT_ENTRYPOINTS, renderPythonCircuit } from "./build-python-circuit";
 import { generatePythonLibrary } from "./generate-python-library";
+import { findProjectRoot } from "./project-root";
 
 const DEFAULT_START_TARGET = "examples";
 const DEFAULT_DEV_SERVER_PORT = 3020;
@@ -46,22 +47,8 @@ const fileExists = async (filePath: string) => {
   }
 };
 
-const findProjectRoot = async (startPath: string) => {
-  let currentPath = startPath;
-
-  while (true) {
-    if (await fileExists(path.join(currentPath, "package.json"))) {
-      return currentPath;
-    }
-
-    const parentPath = path.dirname(currentPath);
-    if (parentPath === currentPath) {
-      return startPath;
-    }
-
-    currentPath = parentPath;
-  }
-};
+const shouldUseInstalledPythonPackage = () =>
+  Boolean(process.env.PYCIRCUIT_RENDER_MODULE);
 
 const shouldSkipDirectory = (directoryName: string) =>
   directoryName.startsWith(".") ||
@@ -343,9 +330,14 @@ export async function startPythonDevServer({
   port = DEFAULT_DEV_SERVER_PORT,
 }: StartPythonDevServerOptions = {}): Promise<PythonDevServerHandle> {
   const target = await resolveStartTarget({ cwd, inputPath });
-  const projectRoot = await findProjectRoot(target.projectDir);
+  const projectRoot = await findProjectRoot({
+    fallbackPath: cwd,
+    startPath: target.projectDir,
+  });
 
-  await ensureGeneratedPythonLibrary(projectRoot);
+  if (!shouldUseInstalledPythonPackage()) {
+    await ensureGeneratedPythonLibrary(projectRoot);
+  }
 
   let syncedCircuits = await syncGeneratedTsxFiles(target);
   const defaultCircuit = syncedCircuits[0];

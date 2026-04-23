@@ -1,5 +1,8 @@
 import type { PropComponent } from "./discover-props-components";
 
+const MINIMUM_PYTHON_VERSION = ">=3.9";
+const DEFAULT_IMPORT_PACKAGE_NAME = "pycircuit";
+
 const renderPythonRuntime = () => `from __future__ import annotations
 
 import json
@@ -226,7 +229,13 @@ __all__ = ${JSON.stringify(exportedNames, null, 2)}
 `;
 };
 
-const renderPythonInit = (components: PropComponent[]) => {
+const renderPythonInit = ({
+  components,
+  packageVersion,
+}: {
+  components: PropComponent[];
+  packageVersion?: string;
+}) => {
   const exportedNames = [
     "Circuit",
     "Element",
@@ -236,8 +245,11 @@ const renderPythonInit = (components: PropComponent[]) => {
     "render_to_tsx",
     ...components.map((component) => component.tagName),
   ];
+  const versionLine = packageVersion
+    ? `__version__ = ${JSON.stringify(packageVersion)}\n\n`
+    : "";
 
-  return `from .runtime import Circuit, Element, PortRef, create_element, render, render_to_tsx
+  return `${versionLine}from .runtime import Circuit, Element, PortRef, create_element, render, render_to_tsx
 from .components import *
 
 __all__ = ${JSON.stringify(exportedNames, null, 2)}
@@ -253,10 +265,215 @@ build-backend = "hatchling.build"
 name = "pycircuit"
 version = "0.1.0"
 description = "Generated Python bindings for @tscircuit/props ${propsVersion}"
-requires-python = ">=3.8"
+requires-python = "${MINIMUM_PYTHON_VERSION}"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pycircuit"]
+`;
+
+const renderDistributionReadme = ({
+  distributionName,
+}: {
+  distributionName: string;
+}) => `# ${distributionName}
+
+\`${distributionName}\` installs the \`pycircuit\` Python import package and a
+\`pycircuit\` CLI backed by a bundled JavaScript runtime.
+
+## Requirements
+
+- Python 3.9+
+- Node.js 18+ available as \`node\`
+
+## Install
+
+\`\`\`bash
+pip install ${distributionName}
+\`\`\`
+
+## Commands
+
+\`\`\`bash
+pycircuit build <path>
+pycircuit start [path] [--port <number>]
+\`\`\`
+
+The Python CLI forwards to the bundled JavaScript runtime and uses the current
+Python interpreter to execute \`circuit.py\` entrypoints.
+`;
+
+const renderDistributionProjectToml = ({
+  distributionName,
+  packageVersion,
+  importPackageName,
+  propsVersion,
+}: {
+  distributionName: string;
+  packageVersion: string;
+  importPackageName: string;
+  propsVersion: string;
+}) => `\
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "${distributionName}"
+version = "${packageVersion}"
+description = "Python bindings and CLI for tscircuit backed by a bundled Node.js runtime generated from @tscircuit/props ${propsVersion}"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = "${MINIMUM_PYTHON_VERSION}"
+keywords = ["electronics", "python", "tscircuit"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/tscircuit/pycircuit"
+Repository = "https://github.com/tscircuit/pycircuit"
+
+[project.scripts]
+pycircuit = "${importPackageName}._cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["${importPackageName}"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "${importPackageName}",
+  "README.md",
+  "LICENSE",
+]
+`;
+
+const renderDistributionCli = ({
+  importPackageName,
+}: {
+  importPackageName: string;
+}) => `from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+from importlib.resources import as_file, files
+
+
+def _resolve_node_executable() -> str:
+    configured_node = os.environ.get("PYCIRCUIT_NODE_BIN")
+    if configured_node:
+        return configured_node
+
+    discovered_node = shutil.which("node")
+    if discovered_node:
+        return discovered_node
+
+    raise RuntimeError(
+        "Node.js 18+ is required. Install 'node' and ensure it is on PATH, or set PYCIRCUIT_NODE_BIN."
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    node_executable = _resolve_node_executable()
+    cli_bundle = files("${importPackageName}").joinpath("_node").joinpath("cli.cjs")
+
+    with as_file(cli_bundle) as cli_bundle_path:
+        env = os.environ.copy()
+        env.setdefault("PYCIRCUIT_PYTHON_BIN", sys.executable)
+        env.setdefault("PYCIRCUIT_RENDER_MODULE", "${importPackageName}._render_entry")
+        completed = subprocess.run([node_executable, str(cli_bundle_path), *args], env=env)
+
+    return int(completed.returncode)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+`;
+
+const renderDistributionEntrypointRenderer = ({
+  importPackageName,
+}: {
+  importPackageName: string;
+}) => `from __future__ import annotations
+
+import json
+import runpy
+import sys
+from pathlib import Path
+from typing import Any
+
+
+def _resolve_render_subject(namespace: dict[str, Any]) -> tuple[Any, str]:
+    for function_name in ("main", "build"):
+        candidate = namespace.get(function_name)
+        if callable(candidate):
+            rendered = candidate()
+            if rendered is not None:
+                return rendered, f"{function_name}()"
+
+    for symbol_name in ("circuit", "app", "root"):
+        candidate = namespace.get(symbol_name)
+        if candidate is not None:
+            return candidate, symbol_name
+
+    raise RuntimeError(
+        "Could not find a renderable symbol. Define circuit = ..., app = ..., root = ..., or a main()/build() function."
+    )
+
+
+def main() -> int:
+    if len(sys.argv) != 4:
+        raise SystemExit(
+            "Usage: python -m ${importPackageName}._render_entry <project_dir> <entry_file> <output_json>"
+        )
+
+    project_dir = Path(sys.argv[1]).resolve()
+    entry_file = Path(sys.argv[2]).resolve()
+    output_json = Path(sys.argv[3]).resolve()
+
+    sys.path.insert(0, str(project_dir))
+    sys.path.insert(0, str(entry_file.parent))
+
+    from ${importPackageName}.runtime import render_to_tsx
+
+    namespace = runpy.run_path(str(entry_file), run_name="__pycircuit__")
+    render_subject, selected_symbol = _resolve_render_subject(namespace)
+    tsx = render_to_tsx(render_subject)
+
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+    output_json.write_text(
+        json.dumps(
+            {
+                "selectedSymbol": selected_symbol,
+                "tsx": tsx,
+            },
+            ensure_ascii=True,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as error:  # pragma: no cover - CLI error surface
+        print(str(error), file=sys.stderr)
+        raise SystemExit(1)
+`;
+
+const renderDistributionMain = () => `from ._cli import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 `;
 
 const renderMetadataJson = ({
@@ -283,10 +500,43 @@ export const renderPythonLibraryFiles = ({
   components: PropComponent[];
   propsVersion: string;
 }) => ({
-  "__init__.py": renderPythonInit(components),
+  "__init__.py": renderPythonInit({ components }),
   "components.py": renderPythonComponents(components),
   "py.typed": "",
   "runtime.py": renderPythonRuntime(),
   "../METADATA.json": renderMetadataJson({ components, propsVersion }),
   "../pyproject.toml": renderPythonProjectToml({ propsVersion }),
+});
+
+export const renderPythonDistributionFiles = ({
+  components,
+  distributionName,
+  packageVersion,
+  propsVersion,
+  importPackageName = DEFAULT_IMPORT_PACKAGE_NAME,
+}: {
+  components: PropComponent[];
+  distributionName: string;
+  packageVersion: string;
+  propsVersion: string;
+  importPackageName?: string;
+}) => ({
+  "README.md": renderDistributionReadme({ distributionName }),
+  "pyproject.toml": renderDistributionProjectToml({
+    distributionName,
+    importPackageName,
+    packageVersion,
+    propsVersion,
+  }),
+  [`${importPackageName}/__init__.py`]: renderPythonInit({
+    components,
+    packageVersion,
+  }),
+  [`${importPackageName}/__main__.py`]: renderDistributionMain(),
+  [`${importPackageName}/_cli.py`]: renderDistributionCli({ importPackageName }),
+  [`${importPackageName}/_render_entry.py`]:
+    renderDistributionEntrypointRenderer({ importPackageName }),
+  [`${importPackageName}/components.py`]: renderPythonComponents(components),
+  [`${importPackageName}/py.typed`]: "",
+  [`${importPackageName}/runtime.py`]: renderPythonRuntime(),
 });
