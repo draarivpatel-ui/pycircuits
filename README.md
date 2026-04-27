@@ -6,7 +6,7 @@
 The project does three things:
 
 1. `pycircuit generate` reads `@tscircuit/props` and emits a generated Python
-   package in `generated/python/pycircuit`.
+   package in `generated/python/pycircuits`.
 2. `pycircuit build <path>` runs a `circuit.py` file with that Python package,
    turns the resulting Python object graph into TSX, and feeds the generated TSX
    into `@tscircuit/eval` to produce circuit JSON.
@@ -45,7 +45,7 @@ In this repository you can also run:
 bun run generate
 ```
 
-That writes a generated Python package to `generated/python/pycircuit`.
+That writes a generated Python package to `generated/python/pycircuits`.
 
 ## Build An Example
 
@@ -84,7 +84,7 @@ npx pycircuit start --port 3030
 ## Example Python API
 
 ```python
-from pycircuit import Circuit, board, led, resistor, trace
+from pycircuits import Circuit, board, led, resistor, trace
 
 led1 = led(name="LED1", color="red", footprint="0603", pcbY=4)
 r1 = resistor(name="R1", resistance="1k", footprint="0603", pcbY=-4)

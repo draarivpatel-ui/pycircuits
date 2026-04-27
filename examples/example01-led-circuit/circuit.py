@@ -1,4 +1,4 @@
-from pycircuit import Circuit, board, led, resistor, trace
+from pycircuits import Circuit, board, led, resistor, trace
 
 led1 = led(name="LED1", color="red", footprint="0603", pcbY=4)
 r1 = resistor(name="R1", resistance="1k", footprint="0603", pcbY=-4)

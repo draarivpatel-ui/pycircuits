@@ -25,7 +25,7 @@ export async function generatePythonLibrary({
   ) as PropsPackageJson;
   const propsVersion = propsPackageJson.version ?? "unknown";
   const components = await discoverPropComponents();
-  const packageDir = path.join(outputDir, "pycircuit");
+  const packageDir = path.join(outputDir, "pycircuits");
   const files = renderPythonLibraryFiles({ components, propsVersion });
 
   await fs.mkdir(packageDir, { recursive: true });

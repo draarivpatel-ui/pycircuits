@@ -46,7 +46,7 @@ def main() -> int:
     sys.path.insert(0, str(project_dir))
     sys.path.insert(0, str(entry_file.parent))
 
-    from pycircuit.runtime import render_to_tsx
+    from pycircuits.runtime import render_to_tsx
 
     namespace = runpy.run_path(str(entry_file), run_name="__pycircuit__")
     render_subject, selected_symbol = _resolve_render_subject(namespace)
