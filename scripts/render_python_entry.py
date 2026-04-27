@@ -39,7 +39,7 @@ def main() -> int:
 
     if not generated_python_dir.exists():
         raise RuntimeError(
-            f"Generated Python library not found: {generated_python_dir}. Run 'pycircuit generate' (or 'bun run generate' in this repo) first."
+            f"Generated Python library not found: {generated_python_dir}. Run 'pycircuits generate' (or 'bun run generate' in this repo) first."
         )
 
     sys.path.insert(0, str(generated_python_dir))
@@ -48,7 +48,7 @@ def main() -> int:
 
     from pycircuits.runtime import render_to_tsx
 
-    namespace = runpy.run_path(str(entry_file), run_name="__pycircuit__")
+    namespace = runpy.run_path(str(entry_file), run_name="__pycircuits__")
     render_subject, selected_symbol = _resolve_render_subject(namespace)
     tsx = render_to_tsx(render_subject)
 

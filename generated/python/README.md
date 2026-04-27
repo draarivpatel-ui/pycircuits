@@ -22,3 +22,19 @@ circuit = Circuit(
     )
 )
 ```
+
+Build artifacts through the tscircuit JavaScript toolchain:
+
+```python
+result = circuit.build(pcb_svg=True, pcb_png=True, schematic_svg=True, gltf=True)
+
+print(result.circuit_json)
+print(result.pcb_svg)
+```
+
+`Circuit.build()` requires the `pycircuits` npm CLI. Install it globally with
+`npm install -g pycircuits`, or pass a custom builder command:
+
+```python
+result = circuit.build(builder=["pycircuits"])
+```

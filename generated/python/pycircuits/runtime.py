@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
+import shlex
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import Any, Optional
 
 
 def _normalize_prop_name(name: str) -> str:
@@ -55,6 +61,19 @@ class Element:
         return render_element(self, indent)
 
 
+@dataclass(frozen=True)
+class BuildResult:
+    circuit_json: Any = None
+    pcb_svg: Optional[str] = None
+    pcb_png: Optional[bytes] = None
+    cad_png: Optional[bytes] = None
+    schematic_svg: Optional[str] = None
+    gltf: Any = None
+    output_dir: Optional[Path] = None
+    artifact_paths: dict[str, Path] = field(default_factory=dict)
+    manifest: dict[str, Any] = field(default_factory=dict)
+
+
 class Circuit:
     def __init__(self, *elements: Any) -> None:
         self.elements: list[Any] = []
@@ -82,6 +101,32 @@ class Circuit:
 
         lines.append(")")
         return "\n".join(lines).rstrip() + "\n"
+
+    def build(
+        self,
+        *,
+        circuit_json: bool = True,
+        pcb_svg: bool = False,
+        pcb_png: bool = False,
+        cad_png: bool = False,
+        schematic_svg: bool = False,
+        gltf: bool = False,
+        out_dir: Any = None,
+        keep_files: bool = False,
+        builder: Any = None,
+    ) -> "BuildResult":
+        return build_circuit(
+            self,
+            circuit_json=circuit_json,
+            pcb_svg=pcb_svg,
+            pcb_png=pcb_png,
+            cad_png=cad_png,
+            schematic_svg=schematic_svg,
+            gltf=gltf,
+            out_dir=out_dir,
+            keep_files=keep_files,
+            builder=builder,
+        )
 
 
 def create_element(
@@ -187,10 +232,151 @@ def render_to_tsx(value: Any) -> str:
 
 render = render_to_tsx
 
+
+def _resolve_builder_command(builder: Any = None) -> list[str]:
+    if builder is not None:
+        if isinstance(builder, (list, tuple)):
+            return [str(part) for part in builder]
+        return shlex.split(str(builder))
+
+    env_command = os.environ.get("PYCIRCUITS_BUILD_COMMAND")
+    if env_command:
+        return shlex.split(env_command)
+
+    pycircuits_bin = shutil.which("pycircuits")
+    if pycircuits_bin:
+        return [pycircuits_bin]
+
+    npx_bin = shutil.which("npx")
+    if npx_bin:
+        return [npx_bin, "--yes", "pycircuits"]
+
+    raise RuntimeError(
+        "Circuit.build() requires the pycircuits npm CLI. Install Node.js and run 'npm install -g pycircuits', or pass builder=[...] to Circuit.build()."
+    )
+
+
+def _read_artifact(path: Path, kind: str) -> Any:
+    if kind in ("pcb_png", "cad_png"):
+        return path.read_bytes()
+
+    if kind in ("pcb_svg", "schematic_svg"):
+        return path.read_text(encoding="utf-8")
+
+    if kind == "circuit_json":
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    if kind == "gltf":
+        if path.suffix == ".glb":
+            return path.read_bytes()
+        if path.suffix == ".gltf":
+            return json.loads(path.read_text(encoding="utf-8"))
+        return path.read_text(encoding="utf-8")
+
+    return path.read_bytes()
+
+
+def build_circuit(
+    value: Any,
+    *,
+    circuit_json: bool = True,
+    pcb_svg: bool = False,
+    pcb_png: bool = False,
+    cad_png: bool = False,
+    schematic_svg: bool = False,
+    gltf: bool = False,
+    out_dir: Any = None,
+    keep_files: bool = False,
+    builder: Any = None,
+) -> BuildResult:
+    if not any((circuit_json, pcb_svg, pcb_png, cad_png, schematic_svg, gltf)):
+        circuit_json = True
+
+    retained_output_dir = Path(out_dir).resolve() if out_dir is not None else None
+    temp_context = None
+
+    if retained_output_dir is None:
+        if keep_files:
+            retained_output_dir = Path(tempfile.mkdtemp(prefix="pycircuits-build-"))
+            build_output_dir = retained_output_dir
+        else:
+            temp_context = tempfile.TemporaryDirectory(prefix="pycircuits-build-")
+            build_output_dir = Path(temp_context.name)
+    else:
+        build_output_dir = retained_output_dir
+
+    try:
+        build_output_dir.mkdir(parents=True, exist_ok=True)
+        tsx_path = build_output_dir / "circuit.tsx"
+        tsx_path.write_text(render_to_tsx(value), encoding="utf-8")
+
+        command = _resolve_builder_command(builder)
+        args = [
+            *command,
+            "build-tsx",
+            str(tsx_path),
+            "--out",
+            str(build_output_dir),
+        ]
+
+        if circuit_json:
+            args.append("--circuit-json")
+        if pcb_svg:
+            args.append("--pcb-svg")
+        if pcb_png:
+            args.append("--pcb-png")
+        if cad_png:
+            args.append("--cad-png")
+        if schematic_svg:
+            args.append("--schematic-svg")
+        if gltf:
+            args.append("--gltf")
+
+        completed = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            detail = completed.stderr.strip() or completed.stdout.strip()
+            raise RuntimeError(
+                f"pycircuits build failed with exit code {completed.returncode}: {detail}"
+            )
+
+        manifest_path = build_output_dir / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        artifact_paths = {
+            key: build_output_dir / relative_path
+            for key, relative_path in manifest.get("artifacts", {}).items()
+        }
+        values = {
+            key: _read_artifact(path, key)
+            for key, path in artifact_paths.items()
+        }
+        should_keep_paths = retained_output_dir is not None
+
+        return BuildResult(
+            circuit_json=values.get("circuit_json"),
+            pcb_svg=values.get("pcb_svg"),
+            pcb_png=values.get("pcb_png"),
+            cad_png=values.get("cad_png"),
+            schematic_svg=values.get("schematic_svg"),
+            gltf=values.get("gltf"),
+            output_dir=build_output_dir if should_keep_paths else None,
+            artifact_paths=artifact_paths if should_keep_paths else {},
+            manifest=manifest,
+        )
+    finally:
+        if temp_context is not None:
+            temp_context.cleanup()
+
 __all__ = [
     "Circuit",
+    "BuildResult",
     "Element",
     "PortRef",
+    "build_circuit",
     "create_element",
     "render",
     "render_to_tsx",

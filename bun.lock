@@ -3,11 +3,12 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "pycircuit",
+      "name": "pycircuits",
       "dependencies": {
         "@flatten-js/core": "^1.6.12",
         "@lume/kiwi": "^0.4.4",
         "@resvg/resvg-js": "^2.6.2",
+        "@tscircuit/alphabet": "^0.0.25",
         "@tscircuit/capacity-autorouter": "^0.0.434",
         "@tscircuit/checks": "^0.0.117",
         "@tscircuit/circuit-json-flex": "^0.0.4",

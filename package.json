@@ -1,11 +1,11 @@
 {
-  "name": "pycircuit",
-  "version": "0.1.0",
+  "name": "pycircuits",
+  "version": "0.1.1",
   "description": "Bootstrap a Python-facing tscircuit workflow from @tscircuit/props.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tscircuit/pycircuit.git"
+    "url": "git+https://github.com/tscircuit/pycircuits.git"
   },
   "type": "module",
   "main": "./dist/index.js",
@@ -19,7 +19,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "pycircuit": "./dist/cli.js"
+    "pycircuits": "./dist/cli.js"
   },
   "files": [
     "dist",
@@ -48,6 +48,7 @@
     "@flatten-js/core": "^1.6.12",
     "@lume/kiwi": "^0.4.4",
     "@resvg/resvg-js": "^2.6.2",
+    "@tscircuit/alphabet": "^0.0.25",
     "@tscircuit/capacity-autorouter": "^0.0.434",
     "@tscircuit/checks": "^0.0.117",
     "@tscircuit/circuit-json-flex": "^0.0.4",

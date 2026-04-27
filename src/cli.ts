@@ -1,14 +1,112 @@
 import path from "node:path";
 import { buildPythonCircuit } from "./lib/build-python-circuit";
+import { buildTsxArtifacts } from "./lib/build-tsx-artifacts";
 import { generatePythonLibrary } from "./lib/generate-python-library";
 import { startPythonDevServer } from "./lib/start-python-dev-server";
 
 const printUsage = () => {
   console.log(`Usage:
-  pycircuit build <path>
-  pycircuit generate
-  pycircuit start [path] [--port <number>]
+  pycircuits build <path>
+  pycircuits build-tsx <path> --out <dir> [--circuit-json] [--pcb-svg] [--pcb-png] [--schematic-svg] [--cad-png] [--gltf]
+  pycircuits generate
+  pycircuits start [path] [--port <number>]
 `);
+};
+
+const parseBuildTsxArgs = (args: string[]) => {
+  const options = {
+    cadPng: false,
+    circuitJson: false,
+    gltf: false,
+    inputPath: "",
+    outputDir: "",
+    pcbPng: false,
+    pcbSvg: false,
+    schematicSvg: false,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (!argument || argument === "--") {
+      continue;
+    }
+
+    if (argument === "--out") {
+      const outputDir = args[index + 1];
+      if (!outputDir) {
+        throw new Error("Missing value for --out");
+      }
+      options.outputDir = outputDir;
+      index += 1;
+      continue;
+    }
+
+    if (argument.startsWith("--out=")) {
+      options.outputDir = argument.slice("--out=".length);
+      continue;
+    }
+
+    if (argument === "--cad-png") {
+      options.cadPng = true;
+      continue;
+    }
+
+    if (argument === "--circuit-json") {
+      options.circuitJson = true;
+      continue;
+    }
+
+    if (argument === "--gltf") {
+      options.gltf = true;
+      continue;
+    }
+
+    if (argument === "--pcb-png") {
+      options.pcbPng = true;
+      continue;
+    }
+
+    if (argument === "--pcb-svg") {
+      options.pcbSvg = true;
+      continue;
+    }
+
+    if (argument === "--schematic-svg") {
+      options.schematicSvg = true;
+      continue;
+    }
+
+    if (argument.startsWith("-")) {
+      throw new Error(`Unknown option: ${argument}`);
+    }
+
+    if (options.inputPath) {
+      throw new Error(`Unexpected argument: ${argument}`);
+    }
+
+    options.inputPath = argument;
+  }
+
+  if (!options.inputPath) {
+    throw new Error("Missing TSX input path");
+  }
+
+  if (!options.outputDir) {
+    throw new Error("Missing --out directory");
+  }
+
+  if (
+    !options.cadPng &&
+    !options.circuitJson &&
+    !options.gltf &&
+    !options.pcbPng &&
+    !options.pcbSvg &&
+    !options.schematicSvg
+  ) {
+    options.circuitJson = true;
+  }
+
+  return options;
 };
 
 const parseStartArgs = (args: string[]) => {
@@ -101,6 +199,17 @@ async function main() {
     console.log(
       `Circuit JSON: ${path.relative(process.cwd(), result.circuitJsonPath)}`,
     );
+    return;
+  }
+
+  if (command === "build-tsx") {
+    const options = parseBuildTsxArgs(args);
+    const manifest = await buildTsxArtifacts({
+      ...options,
+      inputPath: path.resolve(options.inputPath),
+      outputDir: path.resolve(options.outputDir),
+    });
+    console.log(JSON.stringify(manifest, null, 2));
     return;
   }
 

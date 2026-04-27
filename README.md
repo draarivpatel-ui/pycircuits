@@ -1,16 +1,16 @@
-# pycircuit
+# pycircuits
 
-`pycircuit` bootstraps a Python-facing tscircuit workflow from
+`pycircuits` bootstraps a Python-facing tscircuit workflow from
 `@tscircuit/props`.
 
 The project does three things:
 
-1. `pycircuit generate` reads `@tscircuit/props` and emits a generated Python
+1. `pycircuits generate` reads `@tscircuit/props` and emits a generated Python
    package in `generated/python/pycircuits`.
-2. `pycircuit build <path>` runs a `circuit.py` file with that Python package,
+2. `pycircuits build <path>` runs a `circuit.py` file with that Python package,
    turns the resulting Python object graph into TSX, and feeds the generated TSX
    into `@tscircuit/eval` to produce circuit JSON.
-3. `pycircuit start` builds every Python example under `examples/` into
+3. `pycircuits start` builds every Python example under `examples/` into
    sibling `*.py.tsx` files, starts a tscircuit dev server rooted at
    `examples/`, and keeps those generated TSX files in sync as the Python files
    change.
@@ -24,7 +24,7 @@ The project does three things:
 ## Install
 
 ```bash
-npm install pycircuit
+npm install pycircuits
 ```
 
 For local development in this repository:
@@ -36,7 +36,7 @@ bun install
 ## Generate The Python Library
 
 ```bash
-npx pycircuit generate
+npx pycircuits generate
 ```
 
 In this repository you can also run:
@@ -50,7 +50,7 @@ That writes a generated Python package to `generated/python/pycircuits`.
 ## Build An Example
 
 ```bash
-npx pycircuit build ./examples/example01-led-circuit
+npx pycircuits build ./examples/example01-led-circuit
 ```
 
 This produces:
@@ -58,10 +58,42 @@ This produces:
 - `dist/examples/example01-led-circuit/generated.circuit.tsx`
 - `dist/examples/example01-led-circuit/circuit.json`
 
+## Build From Python
+
+`Circuit.build()` renders the Python circuit through the tscircuit JavaScript
+toolchain and returns a `BuildResult`.
+
+```python
+result = circuit.build(
+    pcb_svg=True,
+    pcb_png=True,
+    schematic_svg=True,
+    gltf=True,
+)
+
+print(result.circuit_json)
+print(result.pcb_svg)
+```
+
+By default, build artifacts are read back into memory and temporary files are
+removed. Pass `out_dir="dist/board"` to keep files on disk:
+
+```python
+result = circuit.build(pcb_svg=True, out_dir="dist/board")
+print(result.artifact_paths["pcb_svg"])
+```
+
+The Python build API requires the `pycircuits` npm CLI to be available. Install it
+globally with `npm install -g pycircuits`, or pass a custom command:
+
+```python
+circuit.build(builder=["bun", "run", "src/cli.ts"])
+```
+
 ## Start The Dev Server
 
 ```bash
-npx pycircuit start
+npx pycircuits start
 ```
 
 This will:
@@ -78,7 +110,7 @@ The tscircuit file picker will then show paths like:
 You can also choose a different port:
 
 ```bash
-npx pycircuit start --port 3030
+npx pycircuits start --port 3030
 ```
 
 ## Example Python API

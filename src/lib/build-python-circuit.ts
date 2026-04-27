@@ -105,17 +105,17 @@ const runPythonRenderer = async ({
   entryFilePath: string;
   projectDir: string;
 }) => {
-  const pythonBin = process.env.PYCIRCUIT_PYTHON_BIN || "python3";
+  const pythonBin = process.env.PYCIRCUITS_PYTHON_BIN || "python3";
   const generatedPythonDir = path.join(projectDir, "generated", "python");
   const rendererScriptPath = resolvePackageAssetPath(
     "scripts/render_python_entry.py",
   );
-  const tempDirPath = await fs.mkdtemp(path.join(os.tmpdir(), "pycircuit-"));
+  const tempDirPath = await fs.mkdtemp(path.join(os.tmpdir(), "pycircuits-"));
   const renderOutputPath = path.join(tempDirPath, "render-output.json");
 
   if (!(await fileExists(generatedPythonDir))) {
     throw new Error(
-      'Generated Python library not found. Run "pycircuit generate" (or "bun run generate" in this repo) first.',
+      'Generated Python library not found. Run "pycircuits generate" (or "bun run generate" in this repo) first.',
     );
   }
 

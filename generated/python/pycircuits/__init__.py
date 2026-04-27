@@ -1,10 +1,12 @@
-from .runtime import Circuit, Element, PortRef, create_element, render, render_to_tsx
+from .runtime import Circuit, BuildResult, Element, PortRef, build_circuit, create_element, render, render_to_tsx
 from .components import *
 
 __all__ = [
   "Circuit",
+  "BuildResult",
   "Element",
   "PortRef",
+  "build_circuit",
   "create_element",
   "render",
   "render_to_tsx",
